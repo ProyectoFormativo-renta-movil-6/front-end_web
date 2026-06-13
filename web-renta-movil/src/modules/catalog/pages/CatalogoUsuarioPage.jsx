@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../../store/authStore'
 import { useLanding } from '../../landing/LandingContext'
 import { COLOR_MARCA } from '../constants'
 import { useCatalogo } from '../hooks/useCatalogo'
-import logo from '@/assets/logo/logo.png'
+import { useFavoritos } from '../hooks/useFavoritos'
+import HeaderCatalogo from '../components/HeaderCatalogo'
 import HeroBusqueda from '../components/HeroBusqueda'
 import FiltrosCatalogo from '../components/FiltrosCatalogo'
 import GridVehiculos from '../components/GridVehiculos'
@@ -12,7 +12,6 @@ import PaginacionCatalogo from '../components/PaginacionCatalogo'
 import EstadoCarga from '../components/EstadoCarga'
 import EstadoError from '../components/EstadoError'
 import EstadoVacio from '../components/EstadoVacio'
-import { showAlert } from '@/utils/swalConfig'
 
 const coloresTema = (esModoOscuro) => ({
   pageBg: esModoOscuro ? '#0f172a' : '#f8fafc',
@@ -51,16 +50,25 @@ const coloresTema = (esModoOscuro) => ({
   chipActiveText: '#fff',
   cardBorder: esModoOscuro ? '#334155' : '#f1f5f9',
   cardShadow: esModoOscuro ? '0 4px 18px rgba(0,0,0,0.24)' : '0 2px 8px rgba(0,0,0,0.05)',
-  loginBorder: esModoOscuro ? 'rgba(148,163,184,0.35)' : 'rgba(30,58,138,0.25)',
-  loginText: esModoOscuro ? '#e2e8f0' : COLOR_MARCA,
-  loginHoverBg: esModoOscuro ? 'rgba(148,163,184,0.08)' : 'rgba(30,58,138,0.05)',
+  favoriteBtnBg: esModoOscuro ? 'rgba(15,23,42,0.86)' : 'rgba(255,255,255,0.92)',
+  favoriteBtnShadow: esModoOscuro ? '0 4px 14px rgba(0,0,0,0.32)' : '0 2px 8px rgba(0,0,0,0.10)',
+  favoriteOn: '#ef4444',
+  favoriteOff: esModoOscuro ? '#94a3b8' : '#94a3b8',
+  skeletonTrack: esModoOscuro ? '#334155' : '#e2e8f0',
 })
 
-export default function CatalogoPage() {
+export default function CatalogoUsuarioPage() {
+  const { usuario } = useAuthStore()
   const { tema } = useLanding()
-  const navigate = useNavigate()
   const esModoOscuro = tema === 'oscuro'
   const c = coloresTema(esModoOscuro)
+
+  const favoritosKey = useMemo(() => {
+    if (!usuario?.id) return 'favoritosVehiculos'
+    return `favoritosVehiculos_${usuario.id}`
+  }, [usuario?.id])
+
+  const { esFavorito, toggleFavorito } = useFavoritos(favoritosKey)
 
   const {
     cargando,
@@ -69,18 +77,27 @@ export default function CatalogoPage() {
     setFiltro,
     busquedaForm,
     setForm,
-    busquedaAplicada,
-    busquedaRealizada,
-    dias,
     resultado,
     totalPaginas,
     vehiculosPagina,
     pagina,
     setPagina,
     errorBusqueda,
+    handleBuscar,
     limpiar,
     reintentar,
-  } = useCatalogo()
+    soloFavoritos,
+    setSoloFavoritos
+  } = useCatalogo({ esFavorito })
+
+  useEffect(() => {
+    setSoloFavoritos(false)
+    setPagina(1)
+  }, [usuario?.id, setSoloFavoritos, setPagina])
+
+  useEffect(() => {
+    setPagina(1)
+  }, [soloFavoritos, filtros, busquedaForm, setPagina])
 
   const inputStyle = {
     width: '100%',
@@ -104,56 +121,20 @@ export default function CatalogoPage() {
     letterSpacing: '0.06em',
   }
 
-  const handleBuscarInvitado = () => {
-    showAlert({
-      icon: 'info',
-      title: 'Modo Invitado',
-      text: 'Para buscar y reservar vehículos con fechas específicas, necesitas tener una cuenta.',
-      confirmButtonText: 'Ir a registro',
-      showCancelButton: true,
-      cancelButtonText: 'Cancelar'
-    }).then((result) => {
-      if (result.isConfirmed) navigate('/registro')
-    })
+  const limpiarTodo = () => {
+    setSoloFavoritos(false)
+    limpiar()
   }
+
+  const mensajeVacio = soloFavoritos
+    ? 'No tienes vehículos marcados como favoritos.'
+    : 'No encontramos vehículos con los filtros seleccionados.'
+
+  const tituloVacio = soloFavoritos ? 'Sin favoritos' : 'Sin resultados'
 
   return (
     <div style={{ minHeight: '100vh', background: c.pageBg, display: 'flex', flexDirection: 'column' }}>
-      <nav style={{
-        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50,
-        background: c.navBg,
-        backdropFilter: 'blur(12px)',
-        borderBottom: `1px solid ${c.navBorder}`,
-        boxShadow: c.navShadow,
-        height: '68px'
-      }}>
-        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px', height: '100%', display: 'flex', alignItems: 'center', gap: '24px' }}>
-          <Link to="/"><img src={logo} alt="RentaMovil" style={{ height: '40px', flexShrink: 0 }} /></Link>
-          <div style={{ flex: 1 }} />
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <Link
-              to="/login"
-              style={{
-                padding: '8px 20px',
-                borderRadius: '9999px',
-                border: `2px solid ${c.loginBorder}`,
-                color: c.loginText,
-                fontSize: '13px',
-                fontWeight: 700,
-                textDecoration: 'none',
-                background: 'transparent',
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = c.loginHoverBg}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-            >
-              Iniciar sesión
-            </Link>
-            <Link to="/registro" style={{ padding: '8px 20px', borderRadius: '9999px', background: COLOR_MARCA, color: '#fff', fontSize: '13px', fontWeight: 700, textDecoration: 'none' }}>
-              Registrarse
-            </Link>
-          </div>
-        </div>
-      </nav>
+      <HeaderCatalogo c={c} usuario={usuario} withLinks />
 
       <div style={{ paddingTop: '68px', flex: 1 }}>
         <HeroBusqueda
@@ -165,12 +146,8 @@ export default function CatalogoPage() {
           busquedaForm={busquedaForm}
           setForm={setForm}
           errorBusqueda={errorBusqueda}
-          busquedaRealizada={busquedaRealizada}
-          busquedaAplicada={busquedaAplicada}
-          dias={dias}
-          limpiar={limpiar}
-          invitado={true}
-          onBuscarInvitado={handleBuscarInvitado}
+          handleBuscar={handleBuscar}
+          invitado={false}
         />
 
         <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '22px 24px 24px', display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
@@ -180,11 +157,16 @@ export default function CatalogoPage() {
             labelStyle={labelStyle}
             filtros={filtros}
             setFiltro={setFiltro}
-            limpiar={limpiar}
-            invitado={true}
-            onBuscarInvitado={handleBuscarInvitado}
+            busquedaForm={busquedaForm}
+            setForm={setForm}
+            errorBusqueda={errorBusqueda}
+            handleBuscar={handleBuscar}
+            limpiar={limpiarTodo}
+            invitado={false}
             showHero={false}
-            mostrarFavoritos={false}
+            soloFavoritos={soloFavoritos}
+            setSoloFavoritos={setSoloFavoritos}
+            mostrarFavoritos={Boolean(usuario?.id)}
           />
 
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -200,17 +182,17 @@ export default function CatalogoPage() {
             {cargando && <EstadoCarga c={c} />}
             {!cargando && error && <EstadoError c={c} error={error} onRetry={reintentar} />}
             {!cargando && !error && resultado.length === 0 && (
-              <EstadoVacio c={c} onLimpiar={limpiar} titulo="Sin resultados" mensaje="No encontramos vehículos con los filtros seleccionados." textoBoton="Limpiar filtros" />
+              <EstadoVacio c={c} onLimpiar={limpiarTodo} titulo={tituloVacio} mensaje={mensajeVacio} textoBoton={soloFavoritos ? 'Ver todos' : 'Limpiar filtros'} />
             )}
 
             {!cargando && !error && resultado.length > 0 && (
               <>
                 <GridVehiculos
                   vehiculosPagina={vehiculosPagina}
-                  esFavorito={() => false}
-                  toggleFavorito={() => handleBuscarInvitado()}
+                  esFavorito={esFavorito}
+                  toggleFavorito={toggleFavorito}
                   c={c}
-                  invitado={true}
+                  invitado={false}
                 />
 
                 <PaginacionCatalogo
